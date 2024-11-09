@@ -1,183 +1,186 @@
 import sys
+from typing import Literal
 import pygame as pg
 import time
-
-XO = "x"
-winner = None
-draw = False
-width = 400
-height = 400
-white = (255, 255, 255)
-line_color = (10, 10, 10)
-
-TTT = [[None] * 3, [None] * 3, [None] * 3]
-
-pg.init()
-fps = 30
-CLOCK = pg.time.Clock()
-screen = pg.display.set_mode((width, height + 100), 0, 32)
-pg.display.set_caption("Tic Tac Toe")
-
-opening = pg.image.load("opening_img.png")
-o_img = pg.image.load("o.png")
-x_img = pg.image.load("x.png")
-
-o_img = pg.transform.scale(o_img, (80, 80))
-x_img = pg.transform.scale(x_img, (80, 80))
-opening = pg.transform.scale(opening, (width, height + 100))
+from dataclasses import dataclass
 
 
-def start():
+WIDTH = 400
+HEIGHT = 400
+WHITE = (255, 255, 255)
+LINE_COLOR = (10, 10, 10)
+
+Board = list[list[str | None]]
+
+OPENING = pg.image.load("opening_img.png")
+O_IMG = pg.image.load("o.png")
+X_IMG = pg.image.load("x.png")
+
+
+@dataclass
+class GameState:
+    draw: bool
+    winner: str | None
+    screen: pg.Surface
+    TTT: Board = None  # type: ignore
+    xo: Literal["x", "o"] = "x"
+
+    def __post_init__(self):
+        if self.TTT is None:
+            self.TTT = [[None] * 3, [None] * 3, [None] * 3]
+
+
+def init_game() -> GameState:
+    pg.init()
+    screen = pg.display.set_mode((WIDTH, HEIGHT + 100), 0, 32)
+    pg.display.set_caption("Tic Tac Toe")
+
+    global O_IMG, X_IMG
+
+    O_IMG = pg.transform.scale(O_IMG, (80, 80))
+    X_IMG = pg.transform.scale(X_IMG, (80, 80))
+    opening = pg.transform.scale(OPENING, (WIDTH, HEIGHT + 100))
+
     screen.blit(opening, (0, 0))
     pg.display.update()
     time.sleep(2)
-    screen.fill(white)
+    screen.fill(WHITE)
 
     # vertical lines
-    pg.draw.line(screen, line_color, (width / 3, 0), (width / 3, height), 7)
-    pg.draw.line(screen, line_color, (width / 3 * 2, 0), (width / 3 * 2, height), 7)
+    pg.draw.line(screen, LINE_COLOR, (WIDTH / 3, 0), (WIDTH / 3, HEIGHT), 7)
+    pg.draw.line(screen, LINE_COLOR, (WIDTH / 3 * 2, 0), (WIDTH / 3 * 2, HEIGHT), 7)
     # Drawing horizontal lines
-    pg.draw.line(screen, line_color, (0, height / 3), (width, height / 3), 7)
-    pg.draw.line(screen, line_color, (0, height / 3 * 2), (width, height / 3 * 2), 7)
+    pg.draw.line(screen, LINE_COLOR, (0, HEIGHT / 3), (WIDTH, HEIGHT / 3), 7)
+    pg.draw.line(screen, LINE_COLOR, (0, HEIGHT / 3 * 2), (WIDTH, HEIGHT / 3 * 2), 7)
+
+    game_state = GameState(False, None, screen)
+    return game_state
 
 
-def draws_status():
-    global draw
-
-    if winner is None:
-        message = XO.upper() + "'s turn"
+def draw_status(game: GameState):
+    if game.winner is None:
+        message = game.xo.upper() + "'s turn"
     else:
-        message = winner.upper() + " won"
+        message = game.winner.upper() + " won"
 
-    if draw:
+    if game.draw:
         message = "Draw"
 
     font = pg.font.Font(None, 30)
-    text = font.render(message, 1, white)
+    text = font.render(message, 1, WHITE)
 
-    screen.fill((0, 0, 0), (0, 400, 500, 100))
-    text_rec = text.get_rect(center=(width / 2, 500 - 50))
-    screen.blit(text, text_rec)
+    game.screen.fill((0, 0, 0), (0, 400, 500, 100))
+    text_rec = text.get_rect(center=(WIDTH / 2, 500 - 50))
+    game.screen.blit(text, text_rec)
     pg.display.update()
 
 
-def check_win():
-    global TTT, winner, draw
-
+def check_win(game: GameState):
     for i in range(3):
-        # check for winning rows.
-        if all(x == TTT[i][0] for x in TTT[i]) and TTT[i][0]:
-            winner = TTT[i][0]
+        # Check for winning rows
+        if game.TTT[i][0] and all(x == game.TTT[i][0] for x in game.TTT[i]):
+            game.winner = game.TTT[i][0]
             pg.draw.line(
-                screen,
+                game.screen,
                 (250, 0, 0),
-                (0, (i + 1) * height / 3 - height / 6),
-                (width, (i + 1) * height / 3 - height / 6),
+                (0, (i + 1) * HEIGHT / 3 - HEIGHT / 6),
+                (WIDTH, (i + 1) * HEIGHT / 3 - HEIGHT / 6),
                 4,
             )
             break
 
-        # check for winning columns.
-        if all(x == TTT[0][i] for x in TTT[i]) and TTT[0][i]:
-            winner = TTT[0][i]
+        # Check for winning columns
+        if game.TTT[0][i] and all(game.TTT[j][i] == game.TTT[0][i] for j in range(3)):
+            game.winner = game.TTT[0][i]
             pg.draw.line(
-                screen,
+                game.screen,
                 (250, 0, 0),
-                ((i + 1) * width / 3 - width / 6, 0),
-                ((i + 1) * width / 3 - width / 6, height),
+                ((i + 1) * WIDTH / 3 - WIDTH / 6, 0),
+                ((i + 1) * WIDTH / 3 - WIDTH / 6, HEIGHT),
                 4,
             )
             break
 
-        # check for diagonal winners
-    if (TTT[0][0] == TTT[1][1] == TTT[2][2]) and (TTT[0][0] is not None):
-        # game won diagonally left to right
-        winner = TTT[0][0]
-        pg.draw.line(screen, (250, 70, 70), (50, 50), (350, 350), 4)
-    if (TTT[0][2] == TTT[1][1] == TTT[2][0]) and (TTT[0][2] is not None):
-        # game won diagonally right to left
-        winner = TTT[0][2]
-        pg.draw.line(screen, (250, 70, 70), (350, 50), (50, 350), 4)
+    # Check for diagonal winners
+    if game.TTT[0][0] and game.TTT[0][0] == game.TTT[1][1] == game.TTT[2][2]:
+        game.winner = game.TTT[0][0]
+        pg.draw.line(game.screen, (250, 70, 70), (50, 50), (WIDTH - 50, HEIGHT - 50), 4)
 
-    if all([all(row) for row in TTT]) and winner is None:
-        draw = True
-    draws_status()
+    elif game.TTT[0][2] and game.TTT[0][2] == game.TTT[1][1] == game.TTT[2][0]:
+        game.winner = game.TTT[0][2]
+        pg.draw.line(game.screen, (250, 70, 70), (WIDTH - 50, 50), (50, HEIGHT - 50), 4)
+
+    # Check for a draw (board full, no winner)
+    if all(all(row) for row in game.TTT) and game.winner is None:
+        game.draw = True
+
+    draw_status(game)
 
 
-def drawXO(row, column):
-    global TTT, XO
+def drawXO(row, column, game: GameState):
     if row == 1:
         posx = 30
     if row == 2:
-        posx = width / 3 + 30
+        posx = WIDTH / 3 + 30
     if row == 3:
-        posx = width / 3 * 2 + 30
+        posx = WIDTH / 3 * 2 + 30
 
     if column == 1:
         posy = 30
     if column == 2:
-        posy = height / 3 + 30
+        posy = HEIGHT / 3 + 30
     if column == 3:
-        posy = height / 3 * 2 + 30
-    TTT[row - 1][column - 1] = XO  # type: ignore
-    if XO == "x":
-        screen.blit(x_img, (posy, posx))  # type: ignore
-        XO = "o"
+        posy = HEIGHT / 3 * 2 + 30
+    game.TTT[row - 1][column - 1] = game.xo  # type: ignore
+    if game.xo == "x":
+        game.screen.blit(X_IMG, (posy, posx))  # type: ignore
+        game.xo = "o"
+
     else:
-        screen.blit(o_img, (posy, posx))  # type: ignore
-        XO = "x"
+        game.screen.blit(O_IMG, (posy, posx))  # type: ignore
+        game.xo = "x"
     pg.display.update()
 
 
-def user_click():
+def user_click(game: GameState):
     x, y = pg.mouse.get_pos()
 
     row, col = None, None
-    if x < width / 3:
+    if x < WIDTH / 3:
         col = 1
-    elif x < width / 3 * 2:
+    elif x < WIDTH / 3 * 2:
         col = 2
-    elif x < width:
+    elif x < WIDTH:
         col = 3
     else:
         col = None
 
-    if y < height / 3:
+    if y < HEIGHT / 3:
         row = 1
-    elif y < height / 3 * 2:
+    elif y < HEIGHT / 3 * 2:
         row = 2
-    elif y < height:
+    elif y < HEIGHT:
         row = 3
     else:
         row = None
 
-    if row and col and TTT[row - 1][col - 1] is None:
-        global XO
-        drawXO(row, col)
-        check_win()
+    if row and col and game.TTT[row - 1][col - 1] is None:
+        drawXO(row, col, game)
+        check_win(game)
 
 
-def reset_game():
-    global TTT, winner, XO, draw
-    time.sleep(3)
-    XO = "x"
-    draw = False
-    start()
-    winner = None
-    TTT = [[None] * 3, [None] * 3, [None] * 3]
+if __name__ == "__main__":
+    game = init_game()
+    while True:
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                pg.quit()
+                sys.exit()
+            elif event.type == pg.MOUSEBUTTONDOWN:
+                # the user clicked; place an X or O
+                user_click(game)
+                if game.winner or game.draw:
+                    time.sleep(3)
+                    game = init_game()
 
-
-start()
-while True:
-    for event in pg.event.get():
-        if event.type == pg.QUIT:
-            pg.quit()
-            sys.exit()
-        elif event.type == pg.MOUSEBUTTONDOWN:
-            # the user clicked; place an X or O
-            user_click()
-            if winner or draw:
-                reset_game()
-
-    pg.display.update()
-    CLOCK.tick(fps)
+        pg.display.update()
